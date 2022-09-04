@@ -1,148 +1,205 @@
+use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg};
+use crate::state::{BRIDGE_CONTRACT, DATA};
 #[cfg(not(feature = "library"))]
-use cosmwasm_std::entry_point;
-use cosmwasm_std::{to_binary, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
-use cw2::set_contract_version;
-
-use crate::error::ContractError;
-use crate::msg::{ExecuteMsg, GetCountResponse, InstantiateMsg, QueryMsg};
-use crate::state::{State, STATE};
+use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, Response, StdResult};
+use cosmwasm_std::{to_binary, Coin, Event, StdError, Uint128};
+use cw2::{get_contract_version, set_contract_version};
+use router_wasm_bindings::types::{ChainType, ContractCall, OutboundBatchRequest};
+use router_wasm_bindings::RouterMsg;
 
 // version info for migration info
-const CONTRACT_NAME: &str = "crates.io:{{project-name}}";
-const CONTRACT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const CONTRACT_NAME: &str = "hello-router-contract";
+const CONTRACT_VERSION: &str = "0.1.0";
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: InstantiateMsg,
-) -> Result<Response, ContractError> {
-    let state = State {
-        count: msg.count,
-        owner: info.sender.clone(),
-    };
+) -> StdResult<Response> {
     set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
-    STATE.save(deps.storage, &state)?;
+    BRIDGE_CONTRACT.save(deps.storage, &msg.bridge_address)?;
+    Ok(Response::new().add_attribute("action", "hello_router_init"))
+}
 
-    Ok(Response::new()
-        .add_attribute("method", "instantiate")
-        .add_attribute("owner", info.sender)
-        .add_attribute("count", msg.count.to_string()))
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<RouterMsg>> {
+    match msg {
+        SudoMsg::HandleInboundReq {
+            sender,
+            chain_type,
+            source_chain_id,
+            payload,
+        } => handle_in_bound_request(deps, sender, chain_type, source_chain_id, payload),
+        SudoMsg::HandleOutboundAck {
+            outbound_tx_requested_by,
+            destination_chain_type,
+            destination_chain_id,
+            outbound_batch_nonce,
+            contract_ack_responses,
+        } => handle_out_bound_ack_request(
+            deps,
+            outbound_tx_requested_by,
+            destination_chain_type,
+            destination_chain_id,
+            outbound_batch_nonce,
+            contract_ack_responses,
+        ),
+    }
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn execute(
     deps: DepsMut,
     _env: Env,
-    info: MessageInfo,
+    _info: MessageInfo,
     msg: ExecuteMsg,
-) -> Result<Response, ContractError> {
+) -> StdResult<Response<RouterMsg>> {
     match msg {
-        ExecuteMsg::Increment {} => try_increment(deps),
-        ExecuteMsg::Reset { count } => try_reset(deps, info, count),
+        ExecuteMsg::UpdateBridgeContract { address, payload } => {
+            update_bridge_contract(deps, address, payload.0)
+        }
     }
 }
 
-pub fn try_increment(deps: DepsMut) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        state.count += 1;
-        Ok(state)
-    })?;
+fn handle_in_bound_request(
+    deps: DepsMut,
+    sender: String,
+    chain_type: u32,
+    src_chain_id: String,
+    payload: Binary,
+) -> StdResult<Response<RouterMsg>> {
+    let payload_string: Vec<u8> = base64::decode(payload.to_string()).unwrap();
+    let string: String = String::from_utf8(payload_string).unwrap();
+    let reverse_string: String = string.chars().rev().collect::<String>();
+    DATA.save(deps.storage, &reverse_string)?;
+    let event = Event::new("in_bound_request")
+        .add_attribute("sender", sender.to_string())
+        .add_attribute("chain_type", chain_type.to_string())
+        .add_attribute("src_chain_id", src_chain_id.clone())
+        .add_attribute("payload", reverse_string.clone());
 
-    Ok(Response::new().add_attribute("method", "try_increment"))
+    let bridge_address: String = fetch_bridge_address(deps.as_ref())?;
+    let contract_call: ContractCall = ContractCall {
+        destination_contract_address: bridge_address.into_bytes(),
+        payload: reverse_string.into_bytes(),
+    };
+    let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
+        destination_chain_type: ChainType::ChainTypeEvm.get_chain_code(),
+        destination_chain_id: String::from("137"),
+        contract_calls: vec![contract_call],
+        relayer_fee: Coin {
+            denom: String::from("router"),
+            amount: Uint128::new(8u128),
+        },
+        outgoing_tx_fee: Coin {
+            denom: String::from("router"),
+            amount: Uint128::new(8u128),
+        },
+        is_atomic: false,
+    };
+    let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
+        outbound_batch_requests: vec![outbound_batch_req],
+        is_sequenced: false,
+    };
+
+    let res = Response::new()
+        .add_message(outbound_batch_reqs)
+        .add_event(event)
+        .add_attribute("sender", sender)
+        .add_attribute("chain_type", chain_type.to_string())
+        .add_attribute("src_chain_id", src_chain_id);
+    Ok(res)
 }
 
-pub fn try_reset(deps: DepsMut, info: MessageInfo, count: i32) -> Result<Response, ContractError> {
-    STATE.update(deps.storage, |mut state| -> Result<_, ContractError> {
-        if info.sender != state.owner {
-            return Err(ContractError::Unauthorized {});
-        }
-        state.count = count;
-        Ok(state)
-    })?;
-    Ok(Response::new().add_attribute("method", "reset"))
+fn handle_out_bound_ack_request(
+    _deps: DepsMut,
+    sender: String,
+    destination_chain_type: u64,
+    destination_chain_id: String,
+    outbound_batch_nonce: u64,
+    contract_ack_responses: Binary,
+) -> StdResult<Response<RouterMsg>> {
+    // let mut ack_status_key: String = destination_chain_id.clone();
+    // ack_status_key.push_str(&destination_chain_type.to_string());
+    // ack_status_key.push_str(&outbound_batch_nonce.to_string());
+
+    // ACK_STATUS.save(deps.storage, &ack_status_key, &contract_ack_responses.0)?;
+    let res = Response::new()
+        .add_attribute("sender", sender)
+        .add_attribute("destination_chain_type", destination_chain_type.to_string())
+        .add_attribute("destination_chain_id", destination_chain_id)
+        .add_attribute("outbound_batch_nonce", outbound_batch_nonce.to_string())
+        .add_attribute("contract_ack_responses", contract_ack_responses.to_string());
+    Ok(res)
+}
+
+fn update_bridge_contract(
+    deps: DepsMut,
+    address: String,
+    payload: Vec<u8>,
+) -> StdResult<Response<RouterMsg>> {
+    BRIDGE_CONTRACT.save(deps.storage, &address)?;
+
+    let contract_call: ContractCall = ContractCall {
+        destination_contract_address: address.clone().into_bytes(),
+        payload,
+    };
+    let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
+        destination_chain_type: ChainType::ChainTypeEvm.get_chain_code(),
+        destination_chain_id: String::from("137"),
+        contract_calls: vec![contract_call],
+        relayer_fee: Coin {
+            denom: String::from("router"),
+            amount: Uint128::new(8u128),
+        },
+        outgoing_tx_fee: Coin {
+            denom: String::from("router"),
+            amount: Uint128::new(8u128),
+        },
+        is_atomic: false,
+    };
+    let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
+        outbound_batch_requests: vec![outbound_batch_req],
+        is_sequenced: false,
+    };
+
+    let res = Response::new()
+        .add_message(outbound_batch_reqs)
+        .add_attribute("bridge_address", address);
+    Ok(res)
+}
+
+#[cfg_attr(not(feature = "library"), entry_point)]
+pub fn migrate(deps: DepsMut, _env: Env, _msg: MigrateMsg) -> StdResult<Response> {
+    let ver = cw2::get_contract_version(deps.storage)?;
+    // ensure we are migrating from an allowed contract
+    if ver.contract != CONTRACT_NAME.to_string() {
+        return Err(StdError::generic_err("Can only upgrade from same type").into());
+    }
+    // note: better to do proper semver compare, but string compare *usually* works
+    if ver.version >= CONTRACT_VERSION.to_string() {
+        return Err(StdError::generic_err("Cannot upgrade from a newer version").into());
+    }
+
+    set_contract_version(deps.storage, CONTRACT_NAME, CONTRACT_VERSION)?;
+    Ok(Response::default())
 }
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn query(deps: Deps, _env: Env, msg: QueryMsg) -> StdResult<Binary> {
     match msg {
-        QueryMsg::GetCount {} => to_binary(&query_count(deps)?),
+        QueryMsg::GetContractVersion {} => to_binary(&get_contract_version(deps.storage)?),
+        QueryMsg::FetchData {} => to_binary(&fetch_data(deps)?),
+        QueryMsg::FetchBridgeAddress {} => to_binary(&get_contract_version(deps.storage)?),
     }
 }
 
-fn query_count(deps: Deps) -> StdResult<GetCountResponse> {
-    let state = STATE.load(deps.storage)?;
-    Ok(GetCountResponse { count: state.count })
+pub fn fetch_data(deps: Deps) -> StdResult<String> {
+    return Ok(DATA.load(deps.storage)?);
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use cosmwasm_std::testing::{mock_dependencies, mock_env, mock_info};
-    use cosmwasm_std::{coins, from_binary};
-
-    #[test]
-    fn proper_initialization() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(1000, "earth"));
-
-        // we can just call .unwrap() to assert this was a success
-        let res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-        assert_eq!(0, res.messages.len());
-
-        // it worked, let's query the state
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
-        assert_eq!(17, value.count);
-    }
-
-    #[test]
-    fn increment() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Increment {};
-        let _res = execute(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // should increase counter by 1
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
-        assert_eq!(18, value.count);
-    }
-
-    #[test]
-    fn reset() {
-        let mut deps = mock_dependencies();
-
-        let msg = InstantiateMsg { count: 17 };
-        let info = mock_info("creator", &coins(2, "token"));
-        let _res = instantiate(deps.as_mut(), mock_env(), info, msg).unwrap();
-
-        // beneficiary can release it
-        let unauth_info = mock_info("anyone", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let res = execute(deps.as_mut(), mock_env(), unauth_info, msg);
-        match res {
-            Err(ContractError::Unauthorized {}) => {}
-            _ => panic!("Must return unauthorized error"),
-        }
-
-        // only the original creator can reset the counter
-        let auth_info = mock_info("creator", &coins(2, "token"));
-        let msg = ExecuteMsg::Reset { count: 5 };
-        let _res = execute(deps.as_mut(), mock_env(), auth_info, msg).unwrap();
-
-        // should now be 5
-        let res = query(deps.as_ref(), mock_env(), QueryMsg::GetCount {}).unwrap();
-        let value: GetCountResponse = from_binary(&res).unwrap();
-        assert_eq!(5, value.count);
-    }
+pub fn fetch_bridge_address(deps: Deps) -> StdResult<String> {
+    return Ok(BRIDGE_CONTRACT.load(deps.storage)?);
 }

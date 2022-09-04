@@ -505,6 +505,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "router-wasm-bindings"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5722967b0e5753abe7830d38d51d3b5050b1f115d56b221d25ae93f204a8e52"
+dependencies = [
+ "cosmwasm-std",
+ "schemars",
+ "serde",
+]
+
+[[package]]
 name = "ryu"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -652,21 +663,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "unicode-ident",
-]
-
-[[package]]
-name = "testgen-local"
-version = "0.1.0"
-dependencies = [
- "cosmwasm-schema",
- "cosmwasm-std",
- "cosmwasm-storage",
- "cw-multi-test",
- "cw-storage-plus",
- "cw2",
- "schemars",
- "serde",
- "thiserror",
 ]
 
 [[package]]
