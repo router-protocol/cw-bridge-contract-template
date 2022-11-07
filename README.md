@@ -1,7 +1,7 @@
-# CosmWasm Starter Pack
+# Router Chain Starter Pack
 
 This is a template to build smart contracts in Rust to run inside a
-[Cosmos SDK](https://github.com/cosmos/cosmos-sdk) module on all chains that enable it.
+[Cosmos SDK](https://github.com/cosmos/cosmos-sdk) module on the Router chain.
 To understand the framework better, please read the overview in the
 [cosmwasm repo](https://github.com/CosmWasm/cosmwasm/blob/master/README.md),
 and dig into the [cosmwasm docs](https://www.cosmwasm.com).
@@ -25,30 +25,22 @@ Now, use it to create your new contract.
 Go to the folder in which you want to place it and run:
 
 
-**Latest: 1.0.0**
+**Latest**
 
 ```sh
-cargo generate --git https://github.com/CosmWasm/cw-template.git --name PROJECT_NAME
+cargo generate --git https://github.com/router-protocol/cw-bridge-contract-template --name PROJECT_NAME
 ````
 
-For cloning minimal code repo:
+For cloning specifc branch code or version of a repo:
 
 ```sh
-cargo generate --git https://github.com/CosmWasm/cw-template.git --branch 1.0-minimal --name PROJECT_NAME
+cargo generate --git https://github.com/router-protocol/cw-bridge-contract-template.git --branch <branch-name> --name PROJECT_NAME
 ```
-
-**Older Version**
-
-Pass version as branch flag:
-
-```sh
-cargo generate --git https://github.com/CosmWasm/cw-template.git --branch <version> --name PROJECT_NAME
-````
 
 Example:
 
 ```sh
-cargo generate --git https://github.com/CosmWasm/cw-template.git --branch 0.16 --name PROJECT_NAME
+cargo generate --git https://github.com/router-protocol/cw-bridge-contract-template.git --branch main --name PROJECT_NAME
 ```
 
 You will now have a new folder called `PROJECT_NAME` (I hope you changed that to something else)
@@ -87,7 +79,7 @@ running `cargo check` or `cargo unit-test`.
 
 Once you have your custom repo, you should check out [Developing](./Developing.md) to explain
 more on how to run tests and develop code. Or go through the
-[online tutorial](https://docs.cosmwasm.com/) to get a better feel
+[online tutorial](https://crates.io/crates/router-wasm-bindings/) to get a better feel
 of how to develop.
 
 [Publishing](./Publishing.md) contains useful information on how to publish your contract

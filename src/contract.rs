@@ -1,3 +1,5 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use crate::msg::{ExecuteMsg, InstantiateMsg, MigrateMsg, QueryMsg, SudoMsg};
 use crate::state::{BRIDGE_CONTRACT, DATA};
 #[cfg(not(feature = "library"))]
@@ -10,6 +12,7 @@ use router_wasm_bindings::RouterMsg;
 // version info for migration info
 const CONTRACT_NAME: &str = "hello-router-contract";
 const CONTRACT_VERSION: &str = "0.1.0";
+const REQUEST_TIMEOUT: u64 = 600;
 
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn instantiate(
@@ -38,6 +41,8 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<Router
             destination_chain_id,
             outbound_batch_nonce,
             contract_ack_responses,
+            execution_code,
+            execution_status,
         } => handle_out_bound_ack_request(
             deps,
             outbound_tx_requested_by,
@@ -45,6 +50,8 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<Router
             destination_chain_id,
             outbound_batch_nonce,
             contract_ack_responses,
+            execution_code,
+            execution_status,
         ),
     }
 }
@@ -85,6 +92,12 @@ fn handle_in_bound_request(
         destination_contract_address: bridge_address.into_bytes(),
         payload: reverse_string.into_bytes(),
     };
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let current_timestamp = since_the_epoch.as_secs();
+    let exp_timestamp: u64 = current_timestamp + REQUEST_TIMEOUT;
     let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
         destination_chain_type: ChainType::ChainTypeEvm.get_chain_code(),
         destination_chain_id: String::from("137"),
@@ -98,10 +111,10 @@ fn handle_in_bound_request(
             amount: Uint128::new(8u128),
         },
         is_atomic: false,
+        exp_timestamp: Some(exp_timestamp),
     };
     let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
         outbound_batch_requests: vec![outbound_batch_req],
-        is_sequenced: false,
     };
 
     let res = Response::new()
@@ -120,6 +133,8 @@ fn handle_out_bound_ack_request(
     destination_chain_id: String,
     outbound_batch_nonce: u64,
     contract_ack_responses: Binary,
+    _execution_code: u8,
+    _execution_status: bool,
 ) -> StdResult<Response<RouterMsg>> {
     // let mut ack_status_key: String = destination_chain_id.clone();
     // ack_status_key.push_str(&destination_chain_type.to_string());
@@ -146,6 +161,12 @@ fn update_bridge_contract(
         destination_contract_address: address.clone().into_bytes(),
         payload,
     };
+    let start = SystemTime::now();
+    let since_the_epoch = start
+        .duration_since(UNIX_EPOCH)
+        .expect("Time went backwards");
+    let current_timestamp = since_the_epoch.as_secs();
+    let exp_timestamp: u64 = current_timestamp + REQUEST_TIMEOUT;
     let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
         destination_chain_type: ChainType::ChainTypeEvm.get_chain_code(),
         destination_chain_id: String::from("137"),
@@ -159,10 +180,10 @@ fn update_bridge_contract(
             amount: Uint128::new(8u128),
         },
         is_atomic: false,
+        exp_timestamp: Some(exp_timestamp),
     };
     let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
         outbound_batch_requests: vec![outbound_batch_req],
-        is_sequenced: false,
     };
 
     let res = Response::new()

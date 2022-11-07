@@ -56,9 +56,7 @@ fn test_sudo_function() {
             match msg {
                 RouterMsg::OutboundBatchRequests {
                     outbound_batch_requests,
-                    is_sequenced,
                 } => {
-                    assert_eq!(is_sequenced, false);
                     assert_eq!(outbound_batch_requests.len(), 1);
                     let request: OutboundBatchRequest = outbound_batch_requests[0].clone();
                     let contract: Vec<u8> = request.contract_calls[0]
@@ -95,9 +93,7 @@ fn test_execute_update_bridge_address() {
             match msg {
                 RouterMsg::OutboundBatchRequests {
                     outbound_batch_requests,
-                    is_sequenced,
                 } => {
-                    assert_eq!(is_sequenced, false);
                     assert_eq!(outbound_batch_requests.len(), 1);
                     let request: OutboundBatchRequest = outbound_batch_requests[0].clone();
                     let contract: Vec<u8> = request.contract_calls[0]
