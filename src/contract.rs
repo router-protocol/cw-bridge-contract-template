@@ -104,14 +104,14 @@ fn handle_in_bound_request(
         contract_calls: vec![contract_call],
         relayer_fee: Coin {
             denom: String::from("router"),
-            amount: Uint128::new(8u128),
+            amount: Uint128::new(100_000u128),
         },
         outgoing_tx_fee: Coin {
             denom: String::from("router"),
-            amount: Uint128::new(8u128),
+            amount: Uint128::new(100_000u128),
         },
         is_atomic: false,
-        exp_timestamp: Some(exp_timestamp),
+        exp_timestamp,
     };
     let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
         outbound_batch_requests: vec![outbound_batch_req],
@@ -127,26 +127,29 @@ fn handle_in_bound_request(
 }
 
 fn handle_out_bound_ack_request(
-    _deps: DepsMut,
+    deps: DepsMut,
     sender: String,
-    destination_chain_type: u64,
+    destination_chain_type: u32,
     destination_chain_id: String,
     outbound_batch_nonce: u64,
-    contract_ack_responses: Binary,
-    _execution_code: u8,
-    _execution_status: bool,
+    contract_ack_responses: Vec<bool>,
+    execution_code: u64,
+    execution_status: bool,
 ) -> StdResult<Response<RouterMsg>> {
     // let mut ack_status_key: String = destination_chain_id.clone();
     // ack_status_key.push_str(&destination_chain_type.to_string());
     // ack_status_key.push_str(&outbound_batch_nonce.to_string());
 
-    // ACK_STATUS.save(deps.storage, &ack_status_key, &contract_ack_responses.0)?;
+    let execution_msg: String = format!(
+        "execution_code {:?}, execution_status {:?}, contract_ack_responses {:?}",
+        execution_code, execution_status, contract_ack_responses
+    );
+    deps.api.debug(&execution_msg);
     let res = Response::new()
         .add_attribute("sender", sender)
         .add_attribute("destination_chain_type", destination_chain_type.to_string())
         .add_attribute("destination_chain_id", destination_chain_id)
-        .add_attribute("outbound_batch_nonce", outbound_batch_nonce.to_string())
-        .add_attribute("contract_ack_responses", contract_ack_responses.to_string());
+        .add_attribute("outbound_batch_nonce", outbound_batch_nonce.to_string());
     Ok(res)
 }
 
@@ -173,14 +176,14 @@ fn update_bridge_contract(
         contract_calls: vec![contract_call],
         relayer_fee: Coin {
             denom: String::from("router"),
-            amount: Uint128::new(8u128),
+            amount: Uint128::new(100_000u128),
         },
         outgoing_tx_fee: Coin {
             denom: String::from("router"),
-            amount: Uint128::new(8u128),
+            amount: Uint128::new(100_000u128),
         },
         is_atomic: false,
-        exp_timestamp: Some(exp_timestamp),
+        exp_timestamp,
     };
     let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
         outbound_batch_requests: vec![outbound_batch_req],
