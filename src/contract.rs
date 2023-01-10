@@ -7,7 +7,7 @@ use cosmwasm_std::{entry_point, Binary, Deps, DepsMut, Env, MessageInfo, Respons
 use cosmwasm_std::{to_binary, Coin, Event, StdError, Uint128};
 use cw2::{get_contract_version, set_contract_version};
 use router_wasm_bindings::types::{ChainType, ContractCall, OutboundBatchRequest};
-use router_wasm_bindings::RouterMsg;
+use router_wasm_bindings::{RouterMsg, Bytes};
 
 // version info for migration info
 const CONTRACT_NAME: &str = "hello-router-contract";
@@ -40,18 +40,20 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<Router
             destination_chain_type,
             destination_chain_id,
             outbound_batch_nonce,
-            contract_ack_responses,
             execution_code,
             execution_status,
+            exec_flags,
+            exec_data,
         } => handle_out_bound_ack_request(
             deps,
             outbound_tx_requested_by,
             destination_chain_type,
             destination_chain_id,
             outbound_batch_nonce,
-            contract_ack_responses,
             execution_code,
             execution_status,
+            exec_flags,
+            exec_data,
         ),
     }
 }
@@ -103,11 +105,11 @@ fn handle_in_bound_request(
         destination_chain_id: String::from("137"),
         contract_calls: vec![contract_call],
         relayer_fee: Coin {
-            denom: String::from("router"),
+            denom: String::from("route"),
             amount: Uint128::new(100_000u128),
         },
         outgoing_tx_fee: Coin {
-            denom: String::from("router"),
+            denom: String::from("route"),
             amount: Uint128::new(100_000u128),
         },
         is_atomic: false,
@@ -132,17 +134,18 @@ fn handle_out_bound_ack_request(
     destination_chain_type: u32,
     destination_chain_id: String,
     outbound_batch_nonce: u64,
-    contract_ack_responses: Vec<bool>,
     execution_code: u64,
     execution_status: bool,
+    exec_flags: Vec<bool>,
+    exec_data: Vec<Binary>,
 ) -> StdResult<Response<RouterMsg>> {
-    // let mut ack_status_key: String = destination_chain_id.clone();
-    // ack_status_key.push_str(&destination_chain_type.to_string());
-    // ack_status_key.push_str(&outbound_batch_nonce.to_string());
-
+    let mut data: Vec<Bytes> = vec![];
+    for i in 0..exec_data.len() {
+        data.push(exec_data[i].0.clone());
+    }
     let execution_msg: String = format!(
-        "execution_code {:?}, execution_status {:?}, contract_ack_responses {:?}",
-        execution_code, execution_status, contract_ack_responses
+        "execution_code {:?}, execution_status {:?}, exec_flags {:?}, exec_data {:?}",
+        execution_code, execution_status, exec_flags, data
     );
     deps.api.debug(&execution_msg);
     let res = Response::new()
@@ -175,11 +178,11 @@ fn update_bridge_contract(
         destination_chain_id: String::from("137"),
         contract_calls: vec![contract_call],
         relayer_fee: Coin {
-            denom: String::from("router"),
+            denom: String::from("route"),
             amount: Uint128::new(100_000u128),
         },
         outgoing_tx_fee: Coin {
-            denom: String::from("router"),
+            denom: String::from("route"),
             amount: Uint128::new(100_000u128),
         },
         is_atomic: false,

@@ -103,11 +103,11 @@ let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
     destination_chain_id: String::from("137"),
     contract_calls: vec![contract_call],
     relayer_fee: Coin {
-        denom: String::from("router"),
+        denom: String::from("route"),
         amount: Uint128::new(100_000u128),
     },
     outgoing_tx_fee: Coin {
-        denom: String::from("router"),
+        denom: String::from("route"),
         amount: Uint128::new(100_000u128),
     },
     is_atomic: false,
