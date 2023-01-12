@@ -26,27 +26,75 @@ rustup target add wasm32-unknown-unknown
 
 ```sh
 # add the following line in the cargo.toml [dependencies] section
-router-wasm-bindings = "0.1.5"
+router-wasm-bindings = "0.1.13"
 ```
 
 To implement cross-chain interoperability, the contract needs to implement the following functionality
  - **SudoMsg** for handling incoming requests from the other chains
- - **RouterMsg** to send request to the other chains.
+ - **RouterMsg** to send a request to the other chains.
 
-The Contract can write the intermediate business logic inbetween of the incoming request and outbound request.
-While writing the intermediate business logic, the developer can convert single or multiple incoming request into single or multiple 
-outbound request. 
+The Contract can write the intermediate business logic in-between the incoming request and outbound request.
+While writing the intermediate business logic, the developer can convert single or multiple incoming requests into single or multiple 
+outbound requests. 
 
-Also, while creating request to other chain, the contract can be developed in such a way where mutiple request can be generated to
+Also, while creating requests to other chains, the contract can be developed in such a way that multiple requests can be generated to
 different chains.
 
-You can find examples for different scenarios in the [cw-bridge-contracts](https://github.com/router-protocol/cw-bridge-contracts.git) repository.
+You can find examples of different scenarios in the [cw-bridge-contracts](https://github.com/router-protocol/cw-bridge-contracts.git) repository.
 
 
 ## [SudoMsg]
 
-The sudo function is one of the entry point for a router-bridge-contract.
-It can be called internally by the chain only. It needs to implement to receive incoming request from the other chains.
+
+The *SudoMsg* is an enum and it has two different message types.
+
+1) HandleInboundReq
+2) HandleOutboundAck
+
+In the following code snippet, we added the details at the field level of the *SudoMsg*. This will helps us in building an understanding of the data that will be coming either in the inbound request or in the outbound acknowledgment request.
+
+```rust
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SudoMsg {
+    // Sudo msg to handle incoming requests from other chains
+    HandleInboundReq {
+        // the inbound initiator application contract address 
+        sender: String,
+        // inbound request src chain type
+        chain_type: u32,
+        // inbound request src chain id
+        source_chain_id: String,
+        // the inbound request instructions in base64 format
+        payload: Binary,
+    },
+    // Sudo msg to handle outbound message acknowledgment
+    HandleOutboundAck {
+        // the outbound request initiator router address
+        outbound_tx_requested_by: String,
+        // outbound request destination chain type
+        destination_chain_type: u32,
+        // outbound request destination chain id
+        destination_chain_id: String,
+        // outbound batch request nonce
+        outbound_batch_nonce: u64,
+        // outbound request execution code info
+        execution_code: u64,
+        // outbound request execution status info
+        execution_status: bool,
+        // outbound request contract calls individual execution status
+        exec_flags: Vec<bool>,
+        // outbound request contract calls individual execution response
+        exec_data: Vec<Binary>,
+    },
+}
+```
+
+The sudo function is one of the entry-point in a cosmwasm contract.
+It can be called internally by the chain only. In Router Chain, the developer needs to implement this sudo function to receive an incoming request. Here, in the following code snippet, we have shown the sample sudo function implementation. 
+
+Developers can have any sort of business logic inside the *handle_in_bound_request* and *handle_out_bound_ack_request* functions. 
+
 ```sh
 
 # import router binding message
@@ -55,27 +103,33 @@ use router_wasm_bindings::{RouterMsg, SudoMsg};
 #[cfg_attr(not(feature = "library"), entry_point)]
 pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<RouterMsg>> {
     match msg {
-        # Sudo msg to handle in coming request from other chains
+        # Sudo msg to handle incoming requests from other chains
         SudoMsg::HandleInboundReq {
             sender,
             chain_type,
             source_chain_id,
             payload,
         } => handle_in_bound_request(deps, sender, chain_type, source_chain_id, payload),
-        # Sudo msg to handle outbound message acknowledgement
+        # Sudo msg to handle outbound message acknowledgment
         SudoMsg::HandleOutboundAck {
             outbound_tx_requested_by,
             destination_chain_type,
             destination_chain_id,
             outbound_batch_nonce,
-            contract_ack_responses,
+            execution_code,
+            execution_status,
+            exec_flags,
+            exec_data,
         } => handle_out_bound_ack_request(
             deps,
             outbound_tx_requested_by,
             destination_chain_type,
             destination_chain_id,
             outbound_batch_nonce,
-            contract_ack_responses,
+            execution_code,
+            execution_status,
+            exec_flags,
+            exec_data,
         ),
     }
 }
@@ -84,16 +138,22 @@ pub fn sudo(deps: DepsMut, _env: Env, msg: SudoMsg) -> StdResult<Response<Router
 
 ## [RouterMsg]
 
-The RouterMsg is a enum type  of the entry point for a router-bridge-contract.
-It can be called internally by the chain only. It needs to implement to receive incoming request from the other chains.
-```sh
+The RouterMsg is an enum type inside the **router-wasm-bindings**. It contains one custom message type.
 
-# import router binding message
+1) OutboundBatchRequests
+
+In the following code snippet, we have added one implementation of OutboundBatchRequests. This message is used to create an outbound request. In the outbound request, we can specify the destination chain id & type, the contract addresses & instructions, the request expiry timestamp, the atomicity flag, etc.
+
+```rust
+// import router binding message
 use router_wasm_bindings::{RouterMsg, SudoMsg};
+use router_wasm_bindings::types::{
+    ChainType, ContractCall, OutboundBatchRequest, OutboundBatchResponse, OutboundBatchResponses,
+};
 
 let address: String = String::from("destination_contract_address");
-let payload: Vec<u8> = let payload: Vec<u8> = b"sample paylaod data".to_vec();
-# Single Outbound request with single contract call
+let payload: Vec<u8> = let payload: Vec<u8> = b"sample payload data".to_vec();
+// Single Outbound request with single contract call
 let contract_call: ContractCall = ContractCall {
     destination_contract_address: address.clone().into_bytes(),
     payload,
@@ -114,8 +174,7 @@ let outbound_batch_req: OutboundBatchRequest = OutboundBatchRequest {
     exp_timestamp: None,
 };
 let outbound_batch_reqs: RouterMsg = RouterMsg::OutboundBatchRequests {
-    outbound_batch_requests: vec![outbound_batch_req],
-    is_sequenced: false,
+    outbound_batch_requests: vec![outbound_batch_req]
 };
 
 let res = Response::new()
@@ -168,7 +227,7 @@ reproducible build process, so third parties can verify that the uploaded Wasm
 code did indeed come from the claimed rust code.
 
 To solve both these issues, we have produced `rust-optimizer`, a docker image to
-produce an extremely small build output in a consistent manner. The suggest way
+produce an extremely small build output consistently. The suggested way
 to run it is this:
 
 ```sh
@@ -186,14 +245,14 @@ docker run --rm -v "$(pwd)":/code \
   cosmwasm/rust-optimizer-arm64:0.12.6
 ```
 
-We must mount the contract code to `/code`. You can use a absolute path instead
+We must mount the contract code to `/code`. You can use an absolute path instead
 of `$(pwd)` if you don't want to `cd` to the directory first. The other two
 volumes are nice for speedup. Mounting `/code/target` in particular is useful
 to avoid docker overwriting your local dev files with root permissions.
 Note the `/code/target` cache is unique for each contract being compiled to limit
 interference, while the registry cache is global.
 
-This is rather slow compared to local compilations, especially the first compile
+This is rather slow compared to local compilations, especially the first compilation
 of a given contract. The use of the two volume caches is very useful to speed up
 following compiles of the same contract.
 
