@@ -27,6 +27,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dea908e7347a8c64e378c17e30ef880ad73e3b4498346b055c2c00ea342f3179"
 
 [[package]]
+name = "bech32"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d86b93f97252c47b41663388e6d155714a9d0c398b99f1005cbc5f978b29f445"
+
+[[package]]
 name = "block-buffer"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -599,12 +605,14 @@ dependencies = [
 
 [[package]]
 name = "router-wasm-bindings"
-version = "0.1.13"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a7b01c6a1745f2d1786e5e51b60067764204836adcfa74a090607fb4d5339ee"
+checksum = "138093f468557e7b378535b65d2569e4b2ce706e9e7952fc67989511a4807d37"
 dependencies = [
+ "bech32",
  "cosmwasm-std",
  "ethabi",
+ "hex",
  "schemars",
  "serde",
 ]

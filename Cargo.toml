@@ -40,7 +40,7 @@ optimize = """docker run --rm -v "$(pwd)":/code \
 """
 
 [dependencies]
-router-wasm-bindings = { version = "0.1.13", default-features = false, features = ["ethabi"] }
+router-wasm-bindings = { version = "0.2.0", default-features = false, features = ["ethabi"] }
 cosmwasm-std = "1.0.0"
 cosmwasm-storage = "1.0.0"
 cw-storage-plus = "0.13.2"
@@ -49,6 +49,7 @@ schemars = "0.8.8"
 serde = { version = "1.0.137", default-features = false, features = ["derive"] }
 thiserror = { version = "1.0.31" }
 base64 = "0.13.0"
+hex = "0.4"
 
 [dev-dependencies]
 cosmwasm-schema = "1.0.0"

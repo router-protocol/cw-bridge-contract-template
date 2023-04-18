@@ -14,6 +14,7 @@ pub struct InstantiateMsg {
 pub enum ExecuteMsg {
     // here user can define other executable messages
     UpdateBridgeContract { address: String, payload: Binary },
+    SetChainType { chain_id: String, chain_type: u64 },
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, JsonSchema)]
@@ -23,7 +24,8 @@ pub struct MigrateMsg {}
 #[serde(rename_all = "snake_case")]
 pub enum QueryMsg {
     // fetch contract version
-    GetContractVersion {}, // here user defined other query messages
-    FetchData {},          // here user defined other query messages
+    GetContractVersion {},
+    FetchData {},
     FetchBridgeAddress {},
+    FetchChainType { chain_id: String },
 }

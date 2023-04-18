@@ -26,7 +26,7 @@ rustup target add wasm32-unknown-unknown
 
 ```sh
 # add the following line in the cargo.toml [dependencies] section
-router-wasm-bindings = "0.1.13"
+router-wasm-bindings = "0.2.0"
 ```
 
 To implement cross-chain interoperability, the contract needs to implement the following functionality
